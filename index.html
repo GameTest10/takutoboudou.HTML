@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>たくと大暴走！追加ライフ1体100点＆22000点宇宙固定編</title>
+    <style>
+        body {
+            margin: 0; padding: 0; background-color: #0c0000; color: #fff;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden; user-select: none;
+        }
+        h1 { margin: 5px 0; font-size: 24px; color: #ff2222; text-shadow: 0 0 15px #ff0000; }
+        #ui-container {
+            display: flex; justify-content: space-between; align-items: center;
+            width: 950px; margin-bottom: 5px; font-size: 18px; font-weight: bold; box-sizing: border-box;
+        }
+        #player-hp-bar { width: 170px; height: 18px; background-color: #444; border: 2px solid #fff; display: inline-block; vertical-align: middle; }
+        #player-hp-fill { width: 100%; height: 100%; background-color: #00ff00; transition: width 0.05s; }
+        #game-wrapper { position: relative; width: 950px; height: 550px; box-sizing: border-box; }
+        canvas { background-color: #030000; border: 4px solid #ff2222; box-shadow: 0 0 30px rgba(255, 0, 0, 0.6); display: block; box-sizing: border-box; }
+        /* 🎮 スタート画面 */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 950px; height: 550px;
+            background-color: rgba(12, 0, 0, 0.95); border: 4px solid #ff2222;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10; box-sizing: border-box;
+        }
+        #play-button {
+            padding: 15px 50px; font-size: 32px; font-weight: bold; color: #fff;
+            background: linear-gradient(135deg, #ff0055, #990022); border: 3px solid #fff;
+            border-radius: 10px; cursor: pointer; text-shadow: 0 0 10px #fff;
+            box-shadow: 0 0 20px rgba(255, 0, 85, 0.6); transition: transform 0.1s, box-shadow 0.1s;
+        }
+        #play-button:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(255, 0, 85, 0.9); }
+        .menu-title { font-size: 40px; color: #ff3333; text-shadow: 0 0 20px #ff0000; margin-bottom: 25px; font-weight: bold; }
+        .instructions-box { background: rgba(255,255,255,0.05); border: 1px solid #ff4444; padding: 20px; border-radius: 8px; margin-bottom: 25px; text-align: left; width: 620px; box-sizing: border-box; }
+        .instructions-box h3 { margin: 0 0 12px 0; color: #ffaa00; font-size: 20px; text-align: center; }
+        .instructions-box p { margin: 6px 0; font-size: 15px; line-height: 1.5; color: #ddd; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🚨 たくと大暴走無双！ 🚨</h1>
+
+    <div id="ui-container">
+        <div>
+            👑 ベスト記録: <span id="best-score" style="color: #00ffcc; margin-right: 12px;">0</span>
+            体力: <div id="player-hp-bar"><div id="player-hp-fill"></div></div> <span id="hp-text">500</span>
+            <span id="heal-count" style="color: #ff3366; margin-left: 12px; font-size: 18px;">❤️×10</span>
+            <span id="bomb-count" style="color: #ffaa00; margin-left: 12px; font-size: 18px;">💣×8</span>
+            <span id="cheat-text" style="color: #ffcc00; margin-left: 10px; display: none; text-shadow: 0 0 5px #fff;">⚠️チート無敵中⚠️</span>
+        </div>
+        <div id="stage-text" style="color: #00ffcc; font-weight: bold; text-shadow: 0 0 5px #000;">ステージ: 🏙️ 街</div>
+        <div>スコア: <span id="score" style="color: #ffff00; font-size: 20px;">0</span></div>
+    </div>
+    <div id="game-wrapper">
+        <!-- 🎮 最初の画面（すべての日本語操作方法を完全掲載） -->
+        <div id="start-screen">
+            <div class="menu-title">たくと大暴走 マルチバース</div>
+            <div class="instructions-box">
+                <h3>【 操作方法のご案内 】</h3>
+                <p>・ 移動方法: 矢印キー または WASDキー でたくとを上下左右に動かす</p>
+                <p>・ 銃の操作: [ N ] キーを連打して前方へ強力なレーザーを発射する</p>
+                <p>・ バリアの操作: [ B ] キーを長押しして無敵シールドを発動する（最高3秒間/冷却6秒）</p>
+                <p>・ 爆弾の操作: [ SPACE ] キーを押して画面内の敵を一撃で全滅させる（8回限定）</p>
+                <p>・ 回復の操作: [ V ] キーを押して減った体力を一瞬で500満タンにする（10回限定）</p>
+            </div>
+            <button id="play-button">PLAY</button>
+        </div>
+        <canvas id="gameCanvas" width="950" height="550"></canvas>
+    </div>
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const bestScoreEl = document.getElementById("best-score");
+        const hpFillEl = document.getElementById("player-hp-fill");
+        const hpTextEl = document.getElementById("hp-text");
+        const stageTextEl = document.getElementById("stage-text");
+        const cheatTextEl = document.getElementById("cheat-text");
+        const bombCountEl = document.getElementById("bomb-count");
+        const healCountEl = document.getElementById("heal-count");
+        const startScreen = document.getElementById("start-screen");
+        const playButton = document.getElementById("play-button");
+
+        let gameActive = false; 
+        let score = 0;
+        let bestScore = localStorage.getItem("takuto_best_score") ? parseInt(localStorage.getItem("takuto_best_score")) : 0;
+        bestScoreEl.textContent = bestScore;
+
+        const keys = {}; let canShoot = true; let audioCtx = null;
+        let currentStage = "city"; 
+        let isCheatInvincible = false;
+        let bombLeft = 8; 
+        let healLeft = 10; 
+
+        function saveBestScore() {
+            if (score > bestScore) {
+                bestScore = score;
+                bestScoreEl.textContent = bestScore;
+                localStorage.setItem("takuto_best_score", bestScore);
+            }
+        }
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        function playSound(type) {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+
+            if (type === 'shoot') {
+                osc.type = 'square'; osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+            } else if (type === 'destroy') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(40, audioCtx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.15, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'boss_hit') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 0.04);
+                gain.gain.setValueAtTime(0.1, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+            } else if (type === 'boss_destroy') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 0.4);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+        window.addEventListener("keydown", e => {
+            if (e.key === " ") e.preventDefault();
+        });
+
+        window.addEventListener("keydown", e => {
+            if (!gameActive) return; 
+            const key = e.key.toLowerCase(); keys[key] = true;
+            if (key === "d") {
+                isCheatInvincible = !isCheatInvincible;
+                cheatTextEl.style.display = isCheatInvincible ? "inline" : "none";
+            }
+            if (e.key === " " && (bombLeft > 0 || isCheatInvincible)) {
+                triggerScreenFlash(); 
+                if (!isCheatInvincible) {
+                    bombLeft--;
+                    bombCountEl.textContent = "💣×" + bombLeft;
+                } else {
+                    bombCountEl.textContent = "💣×∞"; 
+                }
+            }
+            if (key === "v" && healLeft > 0) {
+                player.hp = player.maxHp;
+                healLeft--;
+                healCountEl.textContent = "❤️×" + healLeft;
+                createExplosion(player.x + player.width/2, player.y + player.height/2, "#ff3366", 25);
+                playSound('boss_hit');
+            }
+            if (key === "n" && canShoot && (!keys["b"] || player.barrierOverheat)) { shootBullet(); canShoot = false; }
+        });
+
+        window.addEventListener("keyup", e => {
+            const key = e.key.toLowerCase(); keys[key] = false; 
+            if (key === "d" && !isCheatInvincible) {
+                bombCountEl.textContent = "💣×" + bombLeft; 
+            }
+            if (key === "n") canShoot = true;
+        });
+
+        const player = { 
+            x: 100, y: 250, width: 48, height: 48, speed: 13, color: "#ff0033", hp: 500, maxHp: 500,
+            barrierTime: 180, maxBarrierTime: 180, barrierOverheat: false  
+        };
+
+        const obstacles = []; const particles = []; const bullets = []; const enemyBullets = []; 
+        let screenFlashTimer = 0; 
+
+        function shootBullet() {
+            bullets.push({ x: player.x + player.width, y: player.y + player.height / 2 - 4, width: 18, height: 8, speed: 24, color: "#ffff00" });
+            playSound('shoot');
+        }
+        function createExplosion(x, y, color, count = 15) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x, y: y, vx: (Math.random() - 0.5) * 14, vy: (Math.random() - 0.5) * 14, radius: Math.random() * 5 + 2, alpha: 1, color: color
+                });
+            }
+        }
+
+        function triggerScreenFlash() {
+            screenFlashTimer = 0; 
+            playSound('boss_destroy');
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].destroyedByBomb = true;
+            }
+        }
+
+        function spawnObstacle(forceX = null) {
+            let types = [];
+            if (currentStage === "space") {
+                types = ["guzira", "poseidon", "zeus"];
+            } else if (currentStage === "whale_time") {
+                types = ["whale"]; // 追加ライフ期間は100%クジラしか来ない！
+            } else if (currentStage === "volcano") {
+                types = ["guzira"]; 
+            } else if (currentStage === "sea") {
+                types = ["building", "building", "car", "truck", "heli", "guzira", "whale", "cruise"];
+            } else {
+                types = ["building", "building", "car", "truck", "heli", "guzira"];
+            }
+                
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            // クジラ重複指定により、出現制限なし（重なってもOK）
+            const startX = forceX !== null ? forceX : canvas.width + Math.random() * 120;
+            let randomHeight = Math.floor(Math.random() * 350) + 50; 
+
+            if (type === "guzira") {
+                obstacles.push({ type: "guzira", x: startX, y: canvas.height - randomHeight - 20, width: 140, height: randomHeight, hp: 12, maxHp: 12, color: "#2a1545", beamTimer: 0, destroyedByBomb: false });
+            } else if (type === "poseidon") {
+                obstacles.push({ type: "poseidon", x: startX, y: canvas.height - randomHeight - 20, width: 200, height: randomHeight, hp: 20, maxHp: 20, color: "#005f73", pumpTimer: 0, destroyedByBomb: false });
+            } else if (type === "zeus") {
+                obstacles.push({ type: "zeus", x: startX, y: canvas.height - randomHeight - 20, width: 130, height: randomHeight, hp: 20, maxHp: 20, color: "#e0aaff", thunderTimer: 0, destroyedByBomb: false });
+            } else if (type === "cruise") {
+                obstacles.push({ type: "cruise", x: startX, y: canvas.height - 180, width: 220, height: 160, hp: 20, maxHp: 20, color: "#ffffff", shootTimer: 0, destroyedByBomb: false });
+            } else if (type === "whale") {
+                obstacles.push({ type: "whale", x: startX, y: canvas.height - 130, width: 180, height: 110, hp: 30, maxHp: 30, color: "#1e3d59", shootTimer: Math.floor(Math.random() * 50), destroyedByBomb: false });
+            } else if (type === "building") {
+                const width = Math.random() * 50 + 45; const height = Math.random() * 280 + 130;
+                obstacles.push({ type: "building", x: startX, y: canvas.height - height - 20, width: width, height: height, color: "#4a4a4a", destroyedByBomb: false });
+            } else if (type === "truck") {
+                obstacles.push({ type: "truck", x: startX, y: canvas.height - 55, width: 85, height: 35, color: "#ccaa00", destroyedByBomb: false });
+            } else if (type === "car") {
+                obstacles.push({ type: "car", x: startX, y: canvas.height - 45, width: 50, height: 25, color: "#cc2222", destroyedByBomb: false });
+            } else if (type === "heli") {
+                obstacles.push({ type: "heli", x: startX, y: Math.random() * 250 + 50, width: 55, height: 30, color: "#8c22cc", rotorAngle: 0, shootTimer: Math.floor(Math.random() * 60), destroyedByBomb: false });
+            }
+        }
+        for (let i = 0; i < 8; i++) { spawnObstacle(200 + i * 180 + Math.random() * 50); }
+        function gameLoop() {
+            if (!gameActive) return;
+            ctx.fillStyle = "rgba(3, 0, 0, 0.35)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // ★【完全更新】ご指定通り 15,001〜22,000点までを追加ライフゾーン、22,001点から宇宙に完全固定！
+            let stageCheck = currentStage;
+            if (score >= 22001) {
+                currentStage = "space";         // 🌌 22,001点突破でずっっっっと宇宙に完全固定！
+            } else if (score >= 15001) {
+                currentStage = "whale_time";     // 🐋 15,001 〜 22,000点【追加ライフ・クジラ重複1体100点ゾーン】
+            } else if (score >= 10000) {
+                currentStage = "volcano";       // 🌋 10,001 〜 15,000点 火山
+            } else if (score >= 5001) {
+                currentStage = "sea";           // 🌊 5,001 〜 10,000点 海
+            } else {
+                currentStage = "city";          // 🏙️ 0 〜 5,000点 街
+            }
+
+            // ステージ変更時に体力・アイテムすべて自動全回復
+            if (currentStage !== stageCheck) {
+                player.hp = player.maxHp; bombLeft = 8; healLeft = 10;
+                bombCountEl.textContent = isCheatInvincible ? "💣×∞" : "💣×8"; healCountEl.textContent = "❤️×10";
+
+                if (currentStage === "space") { stageTextEl.textContent = "ステージ: 🌌 宇宙（神話・最終固定）"; stageTextEl.style.color = "#d6b4fc"; }
+                else if (currentStage === "whale_time") { stageTextEl.textContent = "ステージ: 🐋 追加ライフの時間（クジラ重複・1体につき100点加算）"; stageTextEl.style.color = "#00f5d4"; }
+                else if (currentStage === "volcano") { stageTextEl.textContent = "ステージ: 🌋 火山（決戦）"; stageTextEl.style.color = "#ff3300"; }
+                else if (currentStage === "sea") { stageTextEl.textContent = "ステージ: 🌊 海"; stageTextEl.style.color = "#33ccff"; }
+                else { stageTextEl.textContent = "ステージ: 🏙️ 街"; stageTextEl.style.color = "#00ffcc"; }
+                
+                obstacles.length = 0; for (let i = 0; i < 8; i++) { spawnObstacle(canvas.width + i * 180); }
+            }
+
+            if (currentStage === "space") ctx.fillStyle = "#120024";
+            else if (currentStage === "volcano") ctx.fillStyle = "#990000"; 
+            else if (currentStage === "sea" || currentStage === "whale_time") ctx.fillStyle = "#005f73"; 
+            else ctx.fillStyle = "#1c1c1c"; 
+            ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+            if (keys["arrowup"] || keys["w"]) player.y -= player.speed;
+            if (keys["arrowdown"] || keys["s"]) player.y += player.speed;
+            if (keys["arrowleft"] || keys["a"]) player.x -= player.speed;
+            if (keys["arrowright"] || keys["d"]) player.x += player.speed;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+            if (player.y < 0) player.y = 0;
+            if (player.y + player.height > canvas.height) player.y = canvas.height - player.height;
+
+            let isBarrierActive = false;
+            if (keys["b"] && !player.barrierOverheat) {
+                isBarrierActive = true; player.barrierTime -= 1;
+                if (player.barrierTime <= 0) { player.barrierTime = 0; player.barrierOverheat = true; isBarrierActive = false; }
+            } else {
+                player.barrierTime += 0.5; 
+                if (player.barrierTime >= player.maxBarrierTime) { player.barrierTime = player.maxBarrierTime; player.barrierOverheat = false; }
+            }
+
+            for (let bIdx = bullets.length - 1; bIdx >= 0; bIdx--) {
+                let bullet = bullets[bIdx]; bullet.x += bullet.speed;
+                if (bullet.x > canvas.width) { bullets.splice(bIdx, 1); continue; }
+                ctx.fillStyle = bullet.color; ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+
+            for (let ebIdx = enemyBullets.length - 1; ebIdx >= 0; ebIdx--) {
+                let eb = enemyBullets[ebIdx]; eb.x -= eb.speed;
+                if (eb.x + eb.width < 0) { enemyBullets.splice(ebIdx, 1); continue; }
+                ctx.fillStyle = eb.color; ctx.fillRect(eb.x, eb.y, eb.width, eb.height);
+
+                if (player.x < eb.x + eb.width && player.x + player.width > eb.x && player.y < eb.y + eb.height && player.y + player.height > eb.y) {
+                    if (isBarrierActive || isCheatInvincible) { createExplosion(eb.x, eb.y, "#33ccff", 4); } 
+                    else { player.hp -= (eb.type === "missile") ? 45 : 20; createExplosion(eb.x, eb.y, "#ff3333", 12); }
+                    enemyBullets.splice(ebIdx, 1);
+                }
+            }
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                let obs = obstacles[i]; obs.x -= (obs.type === "guzira" || obs.type === "poseidon" || obs.type === "zeus" || obs.type === "whale" || obs.type === "cruise") ? 4 : 10;
+                if (obs.x + obs.width < -250) { obstacles.splice(i, 1); spawnObstacle(); continue; }
+
+                // クジラが追加ライフの時間にクルーズ船と同等の赤ミサイルを撃つ処理
+                if (obs.type === "whale" && currentStage === "whale_time") {
+                    obs.shootTimer = (obs.shootTimer + 1) % 70;
+                    if (obs.shootTimer === 0 && obs.x > 0 && obs.x < canvas.width) { 
+                        enemyBullets.push({ type: "missile", x: obs.x, y: obs.y + obs.height / 2 + 10, width: 25, height: 10, speed: 15, color: "#ff1111" }); 
+                    }
+                }
+
+                if (obs.type === "guzira") {
+                    obs.beamTimer = (obs.beamTimer + 1) % 180;
+                    if (obs.beamTimer > 60 && obs.beamTimer < 140) {
+                        let beamY = obs.y + Math.min(40, obs.height / 2); let beamHeight = Math.min(45, obs.height);
+                        ctx.fillStyle = "rgba(186, 23, 255, 0.7)"; ctx.fillRect(0, beamY, obs.x + 20, beamHeight);
+                        ctx.fillStyle = "#fff"; ctx.fillRect(0, beamY + 12, obs.x + 20, beamHeight - 24);
+                        if (player.x < obs.x + 20 && player.x + player.width > 0 && player.y < beamY + beamHeight && player.y + player.height > beamY) {
+                            if (isBarrierActive || isCheatInvincible) { createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#33ccff", 1); }
+                            else { player.hp -= 3; createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#ba17ff", 2); }
+                        }
+                    }
+                }
+
+                if (obs.type === "poseidon") {
+                    obs.pumpTimer = (obs.pumpTimer + 1) % 160;
+                    if (obs.pumpTimer > 50 && obs.pumpTimer < 120) {
+                        let pumpY = obs.y + 10; let pumpHeight = obs.height * 0.85;
+                        ctx.fillStyle = "rgba(0, 180, 216, 0.65)"; ctx.fillRect(0, pumpY, obs.x + 40, pumpHeight);
+                        ctx.fillStyle = "#e0f2fe"; ctx.fillRect(0, pumpY + 15, obs.x + 40, pumpHeight - 30);
+                        if (player.x < obs.x + 40 && player.x + player.width > 0 && player.y < pumpY + pumpHeight && player.y + player.height > pumpY) {
+                            if (isBarrierActive || isCheatInvincible) { createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#33ccff", 1); }
+                            else { player.hp -= 5; createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#00b4d8", 3); } 
+                        }
+                    }
+                }
+
+                if (obs.type === "zeus") {
+                    obs.thunderTimer = (obs.thunderTimer + 1) % 120;
+                    if (obs.thunderTimer > 60 && obs.thunderTimer < 90) {
+                        let thunderX = obs.x - 120; let thunderWidth = 90;
+                        ctx.fillStyle = "rgba(255, 234, 0, 0.8)"; ctx.fillRect(thunderX, 0, thunderWidth, canvas.height);
+                        ctx.fillStyle = "#fff"; ctx.fillRect(thunderX + 25, 0, thunderWidth - 50, canvas.height);
+                        if (player.x < thunderX + thunderWidth && player.x + player.width > thunderX && player.y < canvas.height && player.y + player.height > 0) {
+                            if (isBarrierActive || isCheatInvincible) { createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#fff", 2); }
+                            else { player.hp -= 6; createExplosion(player.x + player.width / 2, player.y + player.height / 2, "#ffea00", 4); } 
+                        }
+                    }
+                }
+
+                if (obs.type === "cruise") {
+                    obs.shootTimer = (obs.shootTimer + 1) % 70;
+                    if (obs.shootTimer === 0 && obs.x > 0 && obs.x < canvas.width) { enemyBullets.push({ type: "missile", x: obs.x, y: obs.y + obs.height / 2 + 10, width: 25, height: 10, speed: 15, color: "#ff1111" }); }
+                }
+                if (obs.type === "heli") {
+                    obs.shootTimer = (obs.shootTimer + 1) % 45;
+                    if (obs.shootTimer === 0 && obs.x > 0 && obs.x < canvas.width) { enemyBullets.push({ type: "heli_bullet", x: obs.x, y: obs.y + obs.height / 2, width: 12, height: 6, speed: 12, color: "#ff3333" }); }
+                }
+                let points = 0; let expColor = "#ff4400"; let destroyed = false;
+
+                for (let bIdx = bullets.length - 1; bIdx >= 0; bIdx--) {
+                    let bullet = bullets[bIdx];
+                    if (bullet.x < obs.x + obs.width && bullet.x + bullet.width > obs.x && bullet.y < obs.y + obs.height && bullet.y + bullet.height > obs.y) {
+                        bullets.splice(bIdx, 1);
+                        if (obs.type === "guzira" || obs.type === "poseidon" || obs.type === "zeus" || obs.type === "whale" || obs.type === "cruise") {
+                            obs.hp -= 1; playSound('boss_hit'); 
+                            expColor = (obs.type === "guzira") ? "#9b11ff" : (obs.type === "poseidon" ? "#0077b6" : (obs.type === "zeus" ? "#ffea00" : "#ffffff"));
+                            createExplosion(bullet.x, bullet.y, expColor, 5); if (obs.hp <= 0) { points = 50; destroyed = true; } 
+                        } else {
+                            destroyed = true;
+                            if (obs.type === "building") { points = 20; expColor = "#cccccc"; }
+                            else if (obs.type === "truck") { points = 20; expColor = "#ffaa00"; }
+                            else if (obs.type === "car") { points = 10; expColor = "#ffbb00"; }
+                            else if (obs.type === "heli") { points = 30; expColor = "#e022ff"; }
+                        }
+                        break;
+                    }
+                }
+
+                if (player.x < obs.x + obs.width && player.x + player.width > obs.x && player.y < obs.y + obs.height && player.y + player.height > obs.y) {
+                    if (obs.type === "guzira" || obs.type === "poseidon" || obs.type === "zeus" || obs.type === "whale" || obs.type === "cruise") {
+                        obs.hp -= 0.15; playSound('boss_hit');
+                        expColor = (obs.type === "guzira") ? "#9b11ff" : (obs.type === "poseidon" ? "#0077b6" : (obs.type === "zeus" ? "#ffea00" : "#ffffff"));
+                        createExplosion(player.x + player.width, player.y + player.height / 2, expColor, 1); player.x = obs.x - player.width; 
+                        if (obs.hp <= 0) { points = 50; destroyed = true; }
+                    } else {
+                        destroyed = true;
+                        if (obs.type === "building") { points = 20; expColor = "#cccccc"; }
+                        else if (obs.type === "truck") { points = 20; expColor = "#ffaa00"; }
+                        else if (obs.type === "car") { points = 10; expColor = "#ffbb00"; }
+                        else if (obs.type === "heli") { points = 30; expColor = "#e022ff"; }
+                    }
+                }
+
+                if (obs.destroyedByBomb) {
+                    destroyed = true;
+                    if (obs.type === "guzira" || obs.type === "poseidon" || obs.type === "zeus" || obs.type === "whale" || obs.type === "cruise") points = 50;
+                    else if (obs.type === "building") points = 20; else if (obs.type === "truck") points = 20; else if (obs.type === "car") points = 10; else if (obs.type === "heli") points = 30;
+                }
+
+                if (destroyed) {
+                    let isBoss = (obs.type === "guzira" || obs.type === "poseidon" || obs.type === "zeus" || obs.type === "whale" || obs.type === "cruise");
+                    createExplosion(obs.x + obs.width / 2, obs.y + obs.height / 2, isBoss ? "#fff" : expColor, isBoss ? 60 : 20); playSound(isBoss ? 'boss_destroy' : 'destroy');
+                    
+                    // ★【更新仕様】15,001〜22,000点の間、クジラ(whale)撃破で最大HP+100＆ご指定通り「1体につき一律100点加算」に固定！
+                    if (obs.type === "whale" && currentStage === "whale_time") {
+                        player.maxHp += 100; player.hp += 100;
+                        points = 100; // インフレを無くし、シンプルに100スコア加算に固定
+                    }
+                    score += points; scoreEl.textContent = score; saveBestScore(); obstacles.splice(i, 1); spawnObstacle(); continue;
+                }
+
+                if (obs.type === "guzira" || obs.type === "poseidon" || obs.type === "zeus") {
+                    ctx.fillStyle = obs.color; ctx.fillRect(obs.x + 20, obs.y, obs.width - 40, obs.height); ctx.fillStyle = obs.type === "poseidon" ? "#00b4d8" : (obs.type === "zeus" ? "#fff" : "#491b6d");
+                    for (let sy = obs.y + 20; sy < obs.y + obs.height - 10; sy += 40) { ctx.fillRect(obs.x + obs.width - 25, sy, 10, 15); }
+                    ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y + 40, 40, 40); 
+                    let isShooting = (obs.type === "guzira" && obs.beamTimer > 60 && obs.beamTimer < 140) || (obs.type === "poseidon" && obs.pumpTimer > 50 && obs.pumpTimer < 120) || (obs.type === "zeus" && obs.thunderTimer > 60 && obs.thunderTimer < 90);
+                    ctx.fillStyle = isShooting ? "#fff" : "#ff0000"; ctx.fillRect(obs.x + 10, obs.y + 20, 15, 10); ctx.fillStyle = "#ff0000"; ctx.fillRect(obs.x, obs.y - 25, obs.width, 7); ctx.fillStyle = "#00ff00"; ctx.fillRect(obs.x, obs.y - 25, obs.width * (obs.hp / obs.maxHp), 7);
+                } else if (obs.type === "cruise") {
+                    ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y + 40, obs.width, obs.height - 40); ctx.fillStyle = "#add8e6"; ctx.fillRect(obs.x + 30, obs.y + 10, obs.width - 60, 30); ctx.fillStyle = "#333"; ctx.fillRect(obs.x + 50, obs.y - 5, 20, 15); ctx.fillStyle = "#ff0000"; ctx.fillRect(obs.x, obs.y - 20, obs.width, 7); ctx.fillStyle = "#00ff00"; ctx.fillRect(obs.x, obs.y - 20, obs.width * (obs.hp / obs.maxHp), 10);
+                } else if (obs.type === "whale") {
+                    ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y + 20, obs.width, obs.height - 20); ctx.fillRect(obs.x + obs.width - 30, obs.y + 40, 40, 30); ctx.fillStyle = "#ff0000"; ctx.fillRect(obs.x, obs.y - 15, obs.width, 7); ctx.fillStyle = "#00bfff"; ctx.fillRect(obs.x, obs.y - 15, obs.width * (obs.hp / obs.maxHp), 10);
+                } else if (obs.type === "building") {
+                    ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y, obs.width, obs.height); ctx.fillStyle = "#fffaaa"; for (let wx = obs.x + 6; wx < obs.x + obs.width - 6; wx += 16) { for (let wy = obs.y + 12; wy < obs.y + obs.height - 12; wy += 22) { ctx.fillRect(wx, wy, 6, 10); } }
+                } else if (obs.type === "truck") { ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                } else if (obs.type === "car") { ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                } else if (obs.type === "heli") { ctx.fillStyle = obs.color; ctx.fillRect(obs.x, obs.y, obs.width, obs.height); obs.rotorAngle += 0.6; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(obs.x + obs.width / 2 - Math.cos(obs.rotorAngle) * 30, obs.y - 5); ctx.lineTo(obs.x + obs.width / 2 + Math.cos(obs.rotorAngle) * 30, obs.y - 5); ctx.stroke(); }
+            }
+
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 0.035; if (p.alpha <= 0) { particles.splice(i, 1); i--; continue; }
+                ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            }
+
+            if (player.hp <= 0) {
+                saveBestScore(); gameActive = false; startScreen.style.display = "flex"; 
+                score = 0; scoreEl.textContent = score; bombLeft = 8; bombCountEl.textContent = "💣×8"; healLeft = 10; healCountEl.textContent = "❤️×10"; 
+                currentStage = "city"; stageTextEl.textContent = "ステージ: 🏙️ 街"; stageTextEl.style.color = "#00ffcc";
+                player.maxHp = 500; player.hp = 500; player.x = 100; player.y = 250; obstacles.length = 0; bullets.length = 0; enemyBullets.length = 0;
+                for (let i = 0; i < 8; i++) { spawnObstacle(300 + i * 180); } return; 
+            }
+
+            let hpPercent = Math.max(0, (player.hp / player.maxHp) * 100); hpFillEl.style.width = hpPercent + "%"; hpTextEl.textContent = Math.ceil(Math.max(0, player.hp)) + "/" + player.maxHp;
+            
+            if (isBarrierActive) { ctx.save(); ctx.strokeStyle = "#33ccff"; ctx.lineWidth = 4; ctx.shadowBlur = 15; ctx.shadowColor = "#33ccff"; ctx.beginPath(); ctx.arc(player.x + player.width / 2, player.y + player.height / 2, player.width - 5, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+            if (player.barrierTime < player.maxBarrierTime) { ctx.fillStyle = player.barrierOverheat ? "#ff3333" : "#33ccff"; ctx.fillRect(player.x, player.y + player.height + 8, player.width * (player.barrierTime / player.maxBarrierTime), 5); }
+            if (isCheatInvincible) { ctx.shadowBlur = 25; ctx.shadowColor = "#ffcc00"; } else { ctx.shadowBlur = 15; ctx.shadowColor = "#ff0000"; }
+            ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height); ctx.shadowBlur = 0;
+            ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(player.x + 6, player.y + 22); ctx.lineTo(player.x + 20, player.y + 14); ctx.moveTo(player.x + 42, player.y + 22); ctx.lineTo(player.x + 28, player.y + 14); ctx.stroke();
+            requestAnimationFrame(gameLoop);
+        }
+
+        playButton.addEventListener("click", () => { initAudio(); startScreen.style.display = "none"; gameActive = true; for (let i = 0; i < obstacles.length; i++) { obstacles[i].x = canvas.width + i * 180; } gameLoop(); });
+        for (let i = 0; i < 8; i++) { spawnObstacle(200 + i * 180); }
+    </script>
+</body>
+</html>
